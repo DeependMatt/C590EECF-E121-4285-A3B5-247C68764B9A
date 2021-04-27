@@ -51,7 +51,7 @@
 
     function generateCSV(tree) {
       var result = [], i;
-      result.push(["IssueType", "Title", "Description"]);
+      result.push(["Id", "IssueType", "Title", "Description"]);
       for (i = 0; i < tree.length; i += 1) {
         var row = generateRow(tree[i]);
         if (row) {
@@ -98,7 +98,8 @@
       }
 
       var result = [];
-      result.push("Story")
+      result.push(frame.id);
+      result.push("Story");
       result.push(title.plainText);
       result.push(flattenText(description));
       return result;
