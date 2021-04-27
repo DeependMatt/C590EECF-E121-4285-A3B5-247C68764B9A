@@ -4,6 +4,106 @@
 <head>
   <script src="https://miro.com/app/static/sdk.1.1.js"></script>
   <script>
+
+    const StickerColors = {
+      "#93d275": "Estimates",
+      "#f5d128": "Description",
+      "#f16c7f": "Issue"
+    };
+    const TitleStickerColor = "#a6ccf5";
+
+    function bruteForceTree(items, lookupByID) {
+      //debugger;
+      var result = [], mappedIds = [], node, i, c;
+      for (i = 0; i < items.length; i += 1) {
+        var mappedNode = processChildren(items[i], lookupByID, mappedIds);
+        if (mappedNode) {
+          result.push(mappedNode);
+        }
+      }
+      return result;
+    };
+
+    function processChildren(node, lookupByID, mappedIds) {
+      //let result = {...node};      
+      let result = {
+        id: node.id,
+        type: node.type,
+        title: node.title,
+        plainText: node.plainText,
+        stickerBackgroundColor: node.style.stickerBackgroundColor ?? "",
+        backgroundColor: node.style.backgroundColor ?? ""
+      };
+
+      if (mappedIds.includes(node.id)) {
+        return undefined;
+      }
+
+      if (node.childrenIds && node.childrenIds.length > 0) {
+        result.children = [];
+        for (c = 0; c < node.childrenIds.length; c += 1) {
+          result.children.push(processChildren(lookupByID[node.childrenIds[c]], lookupByID, mappedIds));
+        }
+      }
+      mappedIds.push(result.id);
+      return result;
+    }
+
+    function generateCSV(tree) {
+      var result = [], i;
+      result.push(["IssueType", "Title", "Description"]);
+      for (i = 0; i < tree.length; i += 1) {
+        var row = generateRow(tree[i]);
+        if (row) {
+          result.push(row);
+        }
+      }
+      return "data:text/csv;charset=utf-8,"
+        + result.map(e => e.join(",")).join("\n");
+    }
+
+    function flattenText(textValues) {
+      let str = "\"", c, i;
+
+      for (const [key, value] of Object.entries(textValues)) {
+        str += key + "\n";
+        for (i = 0; i < value.length; i += 1) {
+          str += "*" + value[i] + "\n"
+        }
+        str += "\n";
+      }
+      return str + "\"";
+    }
+
+    function generateRow(frame) {
+      var description = [];
+
+      if (!frame.children || frame.children.length == 0) {
+        console.log("ignoring " + frame.title + " | " + frame.plainText + " because no children")
+        return undefined;
+      }
+
+      var title = frame.children.filter(obj => { return obj.stickerBackgroundColor === TitleStickerColor });
+      if (title.length != 1) {
+        console.log("ignoring " + frame.title + " | " + frame.plainText + " because no title or multititle")
+        return undefined;
+      }
+      title = title[0];
+
+      for (const [key, value] of Object.entries(StickerColors)) {
+        var entries = frame.children.filter(obj => { return obj.stickerBackgroundColor === key });
+        if (entries && entries.length > 0) {
+          description[value] = entries.map(function (item) { return item.plainText.replace("\"", "\\\""); });
+        }
+      }
+
+      var result = [];
+      result.push("Story")
+      result.push(title.plainText);
+      result.push(flattenText(description));
+      return result;
+    }
+
     miro.onReady(() => {
       miro.initialize({
         extensionPoints: {
@@ -11,118 +111,17 @@
             title: 'Roadmap Exporter',
             svgIcon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 67.671 67.671"><path d="M52.946 23.348H42.834v6h10.112c3.007 0 5.34 1.536 5.34 2.858v26.606c0 1.322-2.333 2.858-5.34 2.858H14.724c-3.007 0-5.34-1.536-5.34-2.858V32.207c0-1.322 2.333-2.858 5.34-2.858h10.11v-6h-10.11c-6.359 0-11.34 3.891-11.34 8.858v26.606c0 4.968 4.981 8.858 11.34 8.858h38.223c6.358 0 11.34-3.891 11.34-8.858V32.207c-.001-4.968-4.982-8.859-11.341-8.859z"/><path d="M24.957 14.955a2.99 2.99 0 002.121-.879l3.756-3.756v30.522a3 3 0 106 0V10.117l3.959 3.959c.586.586 1.354.879 2.121.879s1.535-.293 2.121-.879a2.998 2.998 0 000-4.242L36.078.877A2.987 2.987 0 0033.958 0h-.046c-.767 0-1.534.291-2.12.877l-8.957 8.957a2.998 2.998 0 002.122 5.121z"/></svg>',
             onClick: () => {
+              miro.board.widgets.get().then(function (miroObjects) {
 
-              var miroObjects = await miro.board.widgets.get();
-              const StickerColors = {
-                "#93d275": "Estimates",
-                "#f5d128": "Description",
-                "#f16c7f": "Issue"
-              };
-              
-              const TitleStickerColor = "#a6ccf5";
-
-              let lookupById = miroObjects.reduce((a, x) => ({ ...a, [x.id]: x }), {})
-
-              function bruteForceTree(items, lookupByID) {
-                //debugger;
-                var result = [], mappedIds = [], node, i, c;
-                for (i = 0; i < items.length; i += 1) {
-                  var mappedNode = processChildren(items[i], lookupByID, mappedIds);
-                  if (mappedNode) {
-                    result.push(mappedNode);
-                  }
-                }
-                return result;
-              };
-
-              function processChildren(node, lookupByID, mappedIds) {
-                //let result = {...node};      
-                let result = {
-                  id: node.id,
-                  type: node.type,
-                  title: node.title,
-                  plainText: node.plainText,
-                  stickerBackgroundColor: node.style.stickerBackgroundColor ?? "",
-                  backgroundColor: node.style.backgroundColor ?? ""
-                };
-
-                if (mappedIds.includes(node.id)) {
-                  return undefined;
-                }
-
-                if (node.childrenIds && node.childrenIds.length > 0) {
-                  result.children = [];
-                  for (c = 0; c < node.childrenIds.length; c += 1) {
-                    result.children.push(processChildren(lookupByID[node.childrenIds[c]], lookupByID, mappedIds));
-                  }
-                }
-                mappedIds.push(result.id);
-                return result;
-              }
-
-              let issueTree = bruteForceTree(miroObjects, lookupById);
-
-              function generateCSV(tree) {
-                var result = [], i;
-                result.push(["IssueType", "Title", "Description"]);
-                for (i = 0; i < tree.length; i += 1) {
-                  var row = generateRow(tree[i]);
-                  if (row) {
-                    result.push(row);
-                  }
-                }
-                return "data:text/csv;charset=utf-8,"
-                  + result.map(e => e.join(",")).join("\n");
-              }
-
-              function flattenText(textValues) {
-                let str = "\"", c, i;
-
-                for (const [key, value] of Object.entries(textValues)) {
-                  str += key + "\n";
-                  for (i = 0; i < value.length; i += 1) {
-                    str += "*" + value[i] + "\n"
-                  }
-                  str += "\n";
-                }
-                return str + "\"";
-              }
-
-              function generateRow(frame) {
-                var description = [];
-
-                if (!frame.children || frame.children.length == 0) {
-                  console.log("ignoring " + frame.title + " | " + frame.plainText + " because no children")
-                  return undefined;
-                }
-
-                var title = frame.children.filter(obj => { return obj.stickerBackgroundColor === TitleStickerColor });
-                if (title.length != 1) {
-                  console.log("ignoring " + frame.title + " | " + frame.plainText + " because no title or multititle")
-                  return undefined;
-                }
-                title = title[0];
-
-                for (const [key, value] of Object.entries(StickerColors)) {
-                  var entries = frame.children.filter(obj => { return obj.stickerBackgroundColor === key });
-                  if (entries && entries.length > 0) {
-                    description[value] = entries.map(function (item) { return item.plainText.replace("\"", "\\\""); });
-                  }
-                }
-
-                var result = [];
-                result.push("Story")
-                result.push(title.plainText);
-                result.push(flattenText(description));
-                return result;
-              }
-
-              var encodedUri = encodeURI(generateCSV(issueTree));
-              window.open(encodedUri);
+                let lookupById = miroObjects.reduce((a, x) => ({ ...a, [x.id]: x }), {});
+                let issueTree = bruteForceTree(miroObjects, lookupById);
+                let encodedUri = encodeURI(generateCSV(issueTree));
+                window.open(encodedUri);
+              });
             }
           }
         }
-      })
+      });
     })
   </script>
 </head>
